@@ -1,4 +1,6 @@
 /*
+ * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ * Not a Contribution
  * Copyright (C) 2006 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +24,6 @@
 #include <telephony/ril_cdma_sms.h>
 #include <telephony/ril_nv_items.h>
 #include <telephony/ril_msim.h>
-
 #ifndef FEATURE_UNIT_TEST
 #include <sys/time.h>
 #endif /* !FEATURE_UNIT_TEST */
@@ -31,20 +32,9 @@
 extern "C" {
 #endif
 
-
-#if defined(ANDROID_SIM_COUNT_2)
-#define SIM_COUNT 2
-#elif defined(ANDROID_SIM_COUNT_3)
-#define SIM_COUNT 3
-#elif defined(ANDROID_SIM_COUNT_4)
-#define SIM_COUNT 4
-#else
 #define SIM_COUNT 1
-#endif
 
-#ifndef ANDROID_MULTI_SIM
-#define SIM_COUNT 1
-#endif
+#define RIL_QCOM_VERSION 3 /* Qualcomm internal RIL version */
 
 #define RIL_VERSION 11     /* Current version */
 #define RIL_VERSION_MIN 6 /* Minimum RIL_VERSION supported */
@@ -58,7 +48,6 @@ extern "C" {
 #define MAX_DEBUG_SOCKET_NAME_LENGTH 12
 #define MAX_QEMU_PIPE_NAME_LENGTH  11
 #define MAX_UUID_LENGTH 64
-
 
 typedef void * RIL_Token;
 
@@ -164,7 +153,8 @@ typedef enum {
     RADIO_TECH_HSPAP = 15, // HSPA+
     RADIO_TECH_GSM = 16, // Only supports voice
     RADIO_TECH_TD_SCDMA = 17,
-    RADIO_TECH_IWLAN = 18
+    RADIO_TECH_IWLAN = 18,
+    RADIO_TECH_LTE_CA = 19
 } RIL_RadioTechnology;
 
 typedef enum {
@@ -186,6 +176,7 @@ typedef enum {
     RAF_HSPAP = (1 << RADIO_TECH_HSPAP),
     RAF_GSM = (1 << RADIO_TECH_GSM),
     RAF_TD_SCDMA = (1 << RADIO_TECH_TD_SCDMA),
+    RAF_LTE_CA = (1 << RADIO_TECH_LTE_CA)
 } RIL_RadioAccessFamily;
 
 typedef enum {
@@ -238,7 +229,17 @@ typedef enum {
     PREF_NET_TYPE_LTE_GSM_WCDMA            = 9, /* LTE, GSM/WCDMA */
     PREF_NET_TYPE_LTE_CMDA_EVDO_GSM_WCDMA  = 10, /* LTE, CDMA, EvDo, GSM/WCDMA */
     PREF_NET_TYPE_LTE_ONLY                 = 11, /* LTE only */
-    PREF_NET_TYPE_LTE_WCDMA                = 12  /* LTE/WCDMA */
+    PREF_NET_TYPE_LTE_WCDMA                = 12,  /* LTE/WCDMA */
+    PREF_NET_TYPE_TD_SCDMA_ONLY            = 13, /* TD-SCDMA only */
+    PREF_NET_TYPE_TD_SCDMA_WCDMA           = 14, /* TD-SCDMA and WCDMA */
+    PREF_NET_TYPE_TD_SCDMA_LTE             = 15, /* TD-SCDMA and LTE */
+    PREF_NET_TYPE_TD_SCDMA_GSM             = 16, /* TD-SCDMA and GSM */
+    PREF_NET_TYPE_TD_SCDMA_GSM_LTE         = 17, /* TD-SCDMA,GSM and LTE */
+    PREF_NET_TYPE_TD_SCDMA_GSM_WCDMA       = 18, /* TD-SCDMA, GSM/WCDMA */
+    PREF_NET_TYPE_TD_SCDMA_WCDMA_LTE       = 19, /* TD-SCDMA, WCDMA and LTE */
+    PREF_NET_TYPE_TD_SCDMA_GSM_WCDMA_LTE   = 20, /* TD-SCDMA, GSM/WCDMA and LTE */
+    PREF_NET_TYPE_TD_SCDMA_GSM_WCDMA_CDMA_EVDO_AUTO  = 21, /* TD-SCDMA, GSM/WCDMA, CDMA and EvDo */
+    PREF_NET_TYPE_TD_SCDMA_LTE_CDMA_EVDO_GSM_WCDMA   = 22  /* TD-SCDMA, LTE, CDMA, EvDo GSM/WCDMA */
 } RIL_PreferredNetworkType;
 
 /* Source for cdma subscription */
@@ -290,7 +291,10 @@ typedef struct {
 
 typedef struct {
     RIL_CallState   state;
-    int             index;      /* Connection Index for use with, eg, AT+CHLD */
+    char            index;      /* Connection Index for use with, eg, AT+CHLD */
+    char            call_id;    /* Samsung call_id */
+    char            foo1;       /* Samsung */
+    char            foo2;       /* Samsung */
     int             toa;        /* type of address, eg 145 = intl */
     char            isMpty;     /* nonzero if is mpty call */
     char            isMT;       /* nonzero if call is mobile terminated */
@@ -300,8 +304,12 @@ typedef struct {
     char            isVoicePrivacy;     /* nonzero if CDMA voice privacy mode is active */
     char *          number;     /* Remote party number */
     int             numberPresentation; /* 0=Allowed, 1=Restricted, 2=Not Specified/Unknown 3=Payphone */
-    char *          name;       /* Remote party name */
+    char            isVideo;    /* Samsung */
+    char            call_type;  /* Samsung */
+    char            call_domain;/* Samsung */
     int             namePresentation; /* 0=Allowed, 1=Restricted, 2=Not Specified/Unknown 3=Payphone */
+    char *          csv;        /* Samsung */
+    char *          name;       /* Remote party name */
     RIL_UUS_Info *  uusInfo;    /* NULL or Pointer to User-User Signaling Information */
 } RIL_Call;
 
@@ -383,6 +391,7 @@ typedef struct {
                                  via PCO(Protocol Configuration Option) for IMS client. */
 } RIL_Data_Call_Response_v9;
 
+#if (RIL_VERSION == 11)
 typedef struct {
     int             status;     /* A RIL_DataCallFailCause, 0 which is PDP_FAIL_NONE if no error */
     int             suggestedRetryTime; /* If status != 0, this fields indicates the suggested retry
@@ -418,6 +427,7 @@ typedef struct {
                                    Value <= 0 means network has either not sent a value or
                                    sent an invalid value */
 } RIL_Data_Call_Response_v11;
+#endif
 
 typedef enum {
     RADIO_TECH_3GPP = 1, /* 3GPP Technologies - GSM, WCDMA */
@@ -521,11 +531,11 @@ typedef struct {
     char *data;     /* May be NULL. In hex string format. */
 } RIL_SIM_APDU;
 
+
 typedef struct {
     int sw1;
     int sw2;
-    char *simResponse;  /* In hex string format ([a-fA-F0-9]*), except for SIM_AUTHENTICATION
-                           response for which it is in Base64 format, see 3GPP TS 31.102 7.1.2 */
+    char *simResponse;  /* In hex string format ([a-fA-F0-9]*). */
 } RIL_SIM_IO_Response;
 
 /* See also com.android.internal.telephony.gsm.CallForwardInfo */
@@ -591,10 +601,53 @@ typedef struct {
 /* See RIL_REQUEST_LAST_CALL_FAIL_CAUSE */
 typedef enum {
     CALL_FAIL_UNOBTAINABLE_NUMBER = 1,
+    CALL_FAIL_NO_ROUTE_TO_DESTINATION = 3,
+    CALL_FAIL_CHANNEL_UNACCEPTABLE = 6,
+    CALL_FAIL_OPERATOR_DETERMINED_BARRING = 8,
     CALL_FAIL_NORMAL = 16,
     CALL_FAIL_BUSY = 17,
+    CALL_FAIL_NO_USER_RESPONDING = 18,
+    CALL_FAIL_NO_ANSWER_FROM_USER = 19,
+    CALL_FAIL_CALL_REJECTED = 21,
+    CALL_FAIL_NUMBER_CHANGED = 22,
+    CALL_FAIL_PREEMPTION = 25,
+    CALL_FAIL_DESTINATION_OUT_OF_ORDER = 27,
+    CALL_FAIL_INVALID_NUMBER_FORMAT = 28,
+    CALL_FAIL_FACILITY_REJECTED = 29,
+    CALL_FAIL_RESP_TO_STATUS_ENQUIRY = 30,
+    CALL_FAIL_NORMAL_UNSPECIFIED = 31,
     CALL_FAIL_CONGESTION = 34,
+    CALL_FAIL_NETWORK_OUT_OF_ORDER = 38,
+    CALL_FAIL_TEMPORARY_FAILURE = 41,
+    CALL_FAIL_SWITCHING_EQUIPMENT_CONGESTION = 42,
+    CALL_FAIL_ACCESS_INFORMATION_DISCARDED = 43,
+    CALL_FAIL_REQUESTED_CIRCUIT_OR_CHANNEL_NOT_AVAILABLE = 44,
+    CALL_FAIL_RESOURCES_UNAVAILABLE_OR_UNSPECIFIED = 47,
+    CALL_FAIL_QOS_UNAVAILABLE = 49,
+    CALL_FAIL_REQUESTED_FACILITY_NOT_SUBSCRIBED = 50,
+    CALL_FAIL_INCOMING_CALLS_BARRED_WITHIN_CUG = 55,
+    CALL_FAIL_BEARER_CAPABILITY_NOT_AUTHORIZED = 57,
+    CALL_FAIL_BEARER_CAPABILITY_UNAVAILABLE = 58,
+    CALL_FAIL_SERVICE_OPTION_NOT_AVAILABLE = 63,
+    CALL_FAIL_BEARER_SERVICE_NOT_IMPLEMENTED = 65,
     CALL_FAIL_ACM_LIMIT_EXCEEDED = 68,
+    CALL_FAIL_REQUESTED_FACILITY_NOT_IMPLEMENTED = 69,
+    CALL_FAIL_ONLY_DIGITAL_INFORMATION_BEARER_AVAILABLE = 70,
+    CALL_FAIL_SERVICE_OR_OPTION_NOT_IMPLEMENTED = 79,
+    CALL_FAIL_INVALID_TRANSACTION_IDENTIFIER = 81,
+    CALL_FAIL_USER_NOT_MEMBER_OF_CUG = 87,
+    CALL_FAIL_INCOMPATIBLE_DESTINATION = 88,
+    CALL_FAIL_INVALID_TRANSIT_NW_SELECTION = 91,
+    CALL_FAIL_SEMANTICALLY_INCORRECT_MESSAGE = 95,
+    CALL_FAIL_INVALID_MANDATORY_INFORMATION = 96,
+    CALL_FAIL_MESSAGE_TYPE_NON_IMPLEMENTED = 97,
+    CALL_FAIL_MESSAGE_TYPE_NOT_COMPATIBLE_WITH_PROTOCOL_STATE = 98,
+    CALL_FAIL_INFORMATION_ELEMENT_NON_EXISTENT = 99,
+    CALL_FAIL_CONDITIONAL_IE_ERROR = 100,
+    CALL_FAIL_MESSAGE_NOT_COMPATIBLE_WITH_PROTOCOL_STATE = 101,
+    CALL_FAIL_RECOVERY_ON_TIMER_EXPIRED = 102,
+    CALL_FAIL_PROTOCOL_ERROR_UNSPECIFIED = 111,
+    CALL_FAIL_INTERWORKING_UNSPECIFIED = 127,
     CALL_FAIL_CALL_BARRED = 240,
     CALL_FAIL_FDN_BLOCKED = 241,
     CALL_FAIL_IMSI_UNKNOWN_IN_VLR = 242,
@@ -625,6 +678,7 @@ typedef struct {
 typedef enum {
     PDP_FAIL_NONE = 0, /* No error, connection ok */
 
+    PDP_FAIL_ACTIVATION_NOT_ALLOWED  = 0x07,
     /* an integer cause code defined in TS 24.008
        section 6.1.3.1.3 or TS 24.301 Release 8+ Annex B.
        If the implementation does not have access to the exact cause codes,
@@ -642,8 +696,7 @@ typedef enum {
     PDP_FAIL_SERVICE_OPTION_NOT_SUBSCRIBED = 0x21, /* no retry */
     PDP_FAIL_SERVICE_OPTION_OUT_OF_ORDER = 0x22,
     PDP_FAIL_NSAPI_IN_USE = 0x23,                  /* no retry */
-    PDP_FAIL_REGULAR_DEACTIVATION = 0x24,          /* possibly restart radio,
-                                                      based on framework config */
+    PDP_FAIL_REGULAR_DEACTIVATION = 0x24,          /* restart radio */
     PDP_FAIL_ONLY_IPV4_ALLOWED = 0x32,             /* no retry */
     PDP_FAIL_ONLY_IPV6_ALLOWED = 0x33,             /* no retry */
     PDP_FAIL_ONLY_SINGLE_BEARER_ALLOWED = 0x34,
@@ -770,6 +823,11 @@ typedef struct
   int              pin1_replaced;   /* applicable to USIM, CSIM & ISIM */
   RIL_PinState     pin1;
   RIL_PinState     pin2;
+  int              foo1;            /* Samsung */
+  int              foo2;            /* Samsung */
+  int              foo3;            /* Samsung */
+  int              foo4;            /* Samsung */
+  int              foo5;            /* Samsung */
 } RIL_AppStatus;
 
 /* Deprecated, use RIL_CardStatus_v6 */
@@ -1237,7 +1295,6 @@ typedef struct {
   RIL_CDMA_InformationRecord infoRec[RIL_CDMA_MAX_NUMBER_OF_INFO_RECS];
 } RIL_CDMA_InformationRecords;
 
-/* See RIL_REQUEST_NV_READ_ITEM */
 typedef struct {
   RIL_NV_Item itemID;
 } RIL_NV_ReadItem;
@@ -1593,12 +1650,13 @@ typedef struct {
 #define RIL_REQUEST_CHANGE_SIM_PIN2 7
 
 /**
- * RIL_REQUEST_ENTER_NETWORK_DEPERSONALIZATION
+ * RIL_REQUEST_ENTER_DEPERSONALIZATION_CODE
  *
- * Requests that network personlization be deactivated
+ * Requests that personlization be deactivated
  *
  * "data" is const char **
- * ((const char **)(data))[0]] is network depersonlization code
+ * ((const char **)(data))[0]] is personlization type
+ * ((const char **)(data))[1]] is depersonlization code
  *
  * "response" is int *
  * ((int *)response)[0] is the number of retries remaining, or -1 if unknown
@@ -1612,7 +1670,7 @@ typedef struct {
  *     (code is invalid)
  */
 
-#define RIL_REQUEST_ENTER_NETWORK_DEPERSONALIZATION 8
+#define RIL_REQUEST_ENTER_DEPERSONALIZATION_CODE 8
 
 /**
  * RIL_REQUEST_GET_CURRENT_CALLS
@@ -4293,7 +4351,6 @@ typedef struct {
 /**
  * RIL_REQUEST_GET_DC_RT_INFO
  *
- * The request is DEPRECATED, use RIL_REQUEST_GET_ACTIVITY_INFO
  * Requests the Data Connection Real Time Info
  *
  * "data" is NULL
@@ -4312,7 +4369,6 @@ typedef struct {
 /**
  * RIL_REQUEST_SET_DC_RT_INFO_RATE
  *
- * The request is DEPRECATED
  * This is the minimum number of milliseconds between successive
  * RIL_UNSOL_DC_RT_INFO_CHANGED messages and defines the highest rate
  * at which RIL_UNSOL_DC_RT_INFO_CHANGED's will be sent. A value of
@@ -4365,7 +4421,9 @@ typedef struct {
  *
  * Used to get phone radio capablility.
  *
- * "data" is the RIL_RadioCapability structure
+ * "data" is int *
+ * ((int *)data)[0] is the phone radio access family defined in
+ * RadioAccessFamily. It's a bit mask value to represent the support type.
  *
  * Valid errors:
  *  SUCCESS
@@ -4460,8 +4518,79 @@ typedef struct {
  */
 #define RIL_REQUEST_GET_ACTIVITY_INFO 135
 
-/***********************************************************************/
+/**
+ * RIL_REQUEST_SIM_GET_ATR
+ *
+ * Get the ATR from SIM Card
+ *
+ * Only valid when radio state is "RADIO_STATE_ON"
+ *
+ * "data" is const int *
+ * ((const int *)data)[0] contains the slot index on the SIM from which ATR is requested.
+ *
+ * "response" is a const char * containing the ATR, See ETSI 102.221 8.1 and ISO/IEC 7816 3
+ *
+ * Valid errors:
+ *
+ * SUCCESS
+ * RADIO_NOT_AVAILABLE (radio resetting)
+ * GENERIC_FAILURE
+ */
+#define RIL_REQUEST_SIM_GET_ATR 136
 
+/* SAMSUNG REQUESTS */
+#define RIL_REQUEST_GET_CELL_BROADCAST_CONFIG 10002
+
+#define RIL_REQUEST_SEND_ENCODED_USSD 10005
+#define RIL_REQUEST_SET_PDA_MEMORY_STATUS 10006
+#define RIL_REQUEST_GET_PHONEBOOK_STORAGE_INFO 10007
+#define RIL_REQUEST_GET_PHONEBOOK_ENTRY 10008
+#define RIL_REQUEST_ACCESS_PHONEBOOK_ENTRY 10009
+#define RIL_REQUEST_DIAL_VIDEO_CALL 10010
+#define RIL_REQUEST_CALL_DEFLECTION 10011
+#define RIL_REQUEST_READ_SMS_FROM_SIM 10012
+#define RIL_REQUEST_USIM_PB_CAPA 10013
+#define RIL_REQUEST_LOCK_INFO 10014
+
+#define RIL_REQUEST_DIAL_EMERGENCY 10016
+#define RIL_REQUEST_GET_STOREAD_MSG_COUNT 10017
+#define RIL_REQUEST_STK_SIM_INIT_EVENT 10018
+#define RIL_REQUEST_GET_LINE_ID 10019
+#define RIL_REQUEST_SET_LINE_ID 10020
+#define RIL_REQUEST_GET_SERIAL_NUMBER 10021
+#define RIL_REQUEST_GET_MANUFACTURE_DATE_NUMBER 10022
+#define RIL_REQUEST_GET_BARCODE_NUMBER 10023
+#define RIL_REQUEST_UICC_GBA_AUTHENTICATE_BOOTSTRAP 10024
+#define RIL_REQUEST_UICC_GBA_AUTHENTICATE_NAF 10025
+#define RIL_REQUEST_SIM_TRANSMIT_BASIC 10026
+#define RIL_REQUEST_SIM_OPEN_CHANNEL 10027
+#define RIL_REQUEST_SIM_CLOSE_CHANNEL 10028
+#define RIL_REQUEST_SIM_TRANSMIT_CHANNEL 10029
+#define RIL_REQUEST_SIM_AUTH 10030
+#define RIL_REQUEST_PS_ATTACH 10031
+#define RIL_REQUEST_PS_DETACH 10032
+#define RIL_REQUEST_ACTIVATE_DATA_CALL 10033
+#define RIL_REQUEST_CHANGE_SIM_PERSO 10034
+#define RIL_REQUEST_ENTER_SIM_PERSO 10035
+#define RIL_REQUEST_GET_TIME_INFO 10036
+#define RIL_REQUEST_OMADM_SETUP_SESSION 10037
+#define RIL_REQUEST_OMADM_SERVER_START_SESSION 10038
+#define RIL_REQUEST_OMADM_CLIENT_START_SESSION 10039
+#define RIL_REQUEST_OMADM_SEND_DATA 10040
+#define RIL_REQUEST_CDMA_GET_DATAPROFILE 10041
+#define RIL_REQUEST_CDMA_SET_DATAPROFILE 10042
+#define RIL_REQUEST_CDMA_GET_SYSTEMPROPERTIES 10043
+#define RIL_REQUEST_CDMA_SET_SYSTEMPROPERTIES 10044
+#define RIL_REQUEST_SEND_SMS_COUNT 10045
+#define RIL_REQUEST_SEND_SMS_MSG 10046
+#define RIL_REQUEST_SEND_SMS_MSG_READ_STATUS 10047
+#define RIL_REQUEST_MODEM_HANGUP 10048
+#define RIL_REQUEST_SET_SIM_POWER 10049
+#define RIL_REQUEST_SET_PREFERRED_NETWORK_LIST 10050
+#define RIL_REQUEST_GET_PREFERRED_NETWORK_LIST 10051
+#define RIL_REQUEST_HANGUP_VT 10052
+
+/***********************************************************************/
 
 #define RIL_UNSOL_RESPONSE_BASE 1000
 
@@ -5006,7 +5135,6 @@ typedef struct {
 /**
  * RIL_UNSOL_DC_RT_INFO_CHANGED
  *
- * The message is DEPRECATED, use RIL_REQUEST_GET_ACTIVITY_INFO
  * Sent when the DC_RT_STATE changes but the time
  * between these messages must not be less than the
  * value set by RIL_REQUEST_SET_DC_RT_RATE.
@@ -5028,7 +5156,7 @@ typedef struct {
  */
 #define RIL_UNSOL_RADIO_CAPABILITY 1042
 
-/*
+/**
  * RIL_UNSOL_ON_SS
  *
  * Called when SS response is received when DIAL/USSD/SS is changed to SS by
@@ -5038,6 +5166,7 @@ typedef struct {
  *
  */
 #define RIL_UNSOL_ON_SS 1043
+
 
 /**
  * RIL_UNSOL_STK_CC_ALPHA_NOTIFY
@@ -5059,30 +5188,40 @@ typedef struct {
  */
 #define RIL_UNSOL_LCEDATA_RECV 1045
 
-/***********************************************************************/
+/* SAMSUNG RESPONSE */
+#define SAMSUNG_UNSOL_RESPONSE_BASE 11000
 
+#define RIL_UNSOL_RELEASE_COMPLETE_MESSAGE 11001
+#define RIL_UNSOL_STK_SEND_SMS_RESULT 11002
+#define RIL_UNSOL_STK_CALL_CONTROL_RESULT 11003
+#define RIL_UNSOL_DUN_CALL_STATUS 11004
 
-#if defined(ANDROID_MULTI_SIM)
-/**
- * RIL_Request Function pointer
- *
- * @param request is one of RIL_REQUEST_*
- * @param data is pointer to data defined for that RIL_REQUEST_*
- *        data is owned by caller, and should not be modified or freed by callee
- * @param t should be used in subsequent call to RIL_onResponse
- * @param datalen the length of data
- *
- */
-typedef void (*RIL_RequestFunc) (int request, void *data,
-                                    size_t datalen, RIL_Token t, RIL_SOCKET_ID socket_id);
+#define RIL_UNSOL_O2_HOME_ZONE_INFO 11007
+#define RIL_UNSOL_DEVICE_READY_NOTI 11008
+#define RIL_UNSOL_GPS_NOTI 11009
+#define RIL_UNSOL_AM 11010
+#define RIL_UNSOL_DUN_PIN_CONTROL_SIGNAL 11011
+#define RIL_UNSOL_DATA_SUSPEND_RESUME 11012
+#define RIL_UNSOL_SAP 11013
 
-/**
- * This function should return the current radio state synchronously
- */
-typedef RIL_RadioState (*RIL_RadioStateRequest)(RIL_SOCKET_ID socket_id);
-
-#else
-/* Backward compatible */
+#define RIL_UNSOL_SIM_SMS_STORAGE_AVAILALE 11015
+#define RIL_UNSOL_HSDPA_STATE_CHANGED 11016
+#define RIL_UNSOL_WB_AMR_STATE 11017
+#define RIL_UNSOL_TWO_MIC_STATE 11018
+#define RIL_UNSOL_DHA_STATE 11019
+#define RIL_UNSOL_UART 11020
+#define RIL_UNSOL_RESPONSE_HANDOVER 11021
+#define RIL_UNSOL_IPV6_ADDR 11022
+#define RIL_UNSOL_NWK_INIT_DISC_REQUEST 11023
+#define RIL_UNSOL_RTS_INDICATION 11024
+#define RIL_UNSOL_OMADM_SEND_DATA 11025
+#define RIL_UNSOL_DUN 11026
+#define RIL_UNSOL_SYSTEM_REBOOT 11027
+#define RIL_UNSOL_VOICE_PRIVACY_CHANGED 11028
+#define RIL_UNSOL_UTS_GETSMSCOUNT 11029
+#define RIL_UNSOL_UTS_GETSMSMSG 11030
+#define RIL_UNSOL_UTS_GET_UNREAD_SMS_STATUS 11031
+#define RIL_UNSOL_MIP_CONNECT_STATUS 11032
 
 /**
  * RIL_Request Function pointer
@@ -5101,9 +5240,6 @@ typedef void (*RIL_RequestFunc) (int request, void *data,
  * This function should return the current radio state synchronously
  */
 typedef RIL_RadioState (*RIL_RadioStateRequest)();
-
-#endif
-
 
 /**
  * This function returns "1" if the specified RIL_REQUEST code is
@@ -5185,23 +5321,15 @@ struct RIL_Env {
     void (*OnRequestComplete)(RIL_Token t, RIL_Errno e,
                            void *response, size_t responselen);
 
-#if defined(ANDROID_MULTI_SIM)
     /**
      * "unsolResponse" is one of RIL_UNSOL_RESPONSE_*
      * "data" is pointer to data defined for that RIL_UNSOL_RESPONSE_*
      *
      * "data" is owned by caller, and should not be modified or freed by callee
      */
-    void (*OnUnsolicitedResponse)(int unsolResponse, const void *data, size_t datalen, RIL_SOCKET_ID socket_id);
-#else
-    /**
-     * "unsolResponse" is one of RIL_UNSOL_RESPONSE_*
-     * "data" is pointer to data defined for that RIL_UNSOL_RESPONSE_*
-     *
-     * "data" is owned by caller, and should not be modified or freed by callee
-     */
+
     void (*OnUnsolicitedResponse)(int unsolResponse, const void *data, size_t datalen);
-#endif
+
     /**
      * Call user-specifed "callback" function on on the same thread that
      * RIL_RequestFunc is called. If "relativeTime" is specified, then it specifies
@@ -5252,17 +5380,6 @@ void RIL_register (const RIL_RadioFunctions *callbacks);
 void RIL_onRequestComplete(RIL_Token t, RIL_Errno e,
                            void *response, size_t responselen);
 
-#if defined(ANDROID_MULTI_SIM)
-/**
- * @param unsolResponse is one of RIL_UNSOL_RESPONSE_*
- * @param data is pointer to data defined for that RIL_UNSOL_RESPONSE_*
- *     "data" is owned by caller, and should not be modified or freed by callee
- * @param datalen the length of data in byte
- */
-
-void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
-                                size_t datalen, RIL_SOCKET_ID socket_id);
-#else
 /**
  * @param unsolResponse is one of RIL_UNSOL_RESPONSE_*
  * @param data is pointer to data defined for that RIL_UNSOL_RESPONSE_*
@@ -5272,7 +5389,7 @@ void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
 
 void RIL_onUnsolicitedResponse(int unsolResponse, const void *data,
                                 size_t datalen);
-#endif
+
 
 /**
  * Call user-specifed "callback" function on on the same thread that
