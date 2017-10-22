@@ -532,23 +532,27 @@ static void requestOrSendDataCallList(RIL_Token *t)
         err = at_tok_nextstr(&line, &out);
         if (err < 0)
             goto error;
-        responses[i].type = alloca(strlen(out) + 1);
-        strcpy(responses[i].type, out);
+
+        int type_size = strlen(out) + 1;
+        responses[i].type = alloca(type_size);
+        strlcpy(responses[i].type, out, type_size);
 
         // APN ignored for v5
         err = at_tok_nextstr(&line, &out);
         if (err < 0)
             goto error;
 
-        responses[i].ifname = alloca(strlen(PPP_TTY_PATH) + 1);
-        strcpy(responses[i].ifname, PPP_TTY_PATH);
+        int ifname_size = strlen(PPP_TTY_PATH) + 1;
+        responses[i].ifname = alloca(ifname_size);
+        strlcpy(responses[i].ifname, PPP_TTY_PATH, ifname_size);
 
         err = at_tok_nextstr(&line, &out);
         if (err < 0)
             goto error;
 
-        responses[i].addresses = alloca(strlen(out) + 1);
-        strcpy(responses[i].addresses, out);
+        int addresses_size = strlen(out) + 1;
+        responses[i].addresses = alloca(addresses_size);
+        strlcpy(responses[i].addresses, out, addresses_size);
 
         {
             char  propValue[PROP_VALUE_MAX];
@@ -1728,11 +1732,6 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
             pdp_type = "IP";
         }
 
-        if (!strcmp("IPV6", pdp_type)) {
-            RLOGW("IPV6 pdp requested, but reference ril only supports IPV4, downgrading.");
-            pdp_type = "IP";
-        }
-
         asprintf(&cmd, "AT+CGDCONT=1,\"%s\",\"%s\",,0,0", pdp_type, apn);
         //FIXME check for error here
         err = at_send_command(cmd, NULL);
@@ -2116,10 +2115,6 @@ onRequest (int request, void *data, size_t datalen, RIL_Token t)
 
             /* success or failure is ignored by the upper layer here.
                it will call GET_CURRENT_CALLS and determine success that way */
-            RIL_onRequestComplete(t, RIL_E_SUCCESS, NULL, 0);
-            break;
-        case RIL_REQUEST_ALLOW_DATA:
-            /* Just return success. */
             RIL_onRequestComplete(t, RIL_E_SUCCESS, NULL, 0);
             break;
 

@@ -1,7 +1,5 @@
 # Copyright 2006 The Android Open Source Project
 
-ifneq ($(BOARD_PROVIDES_LIBREFERENCE_RIL),true)
-
 # XXX using libutils for simulator build only...
 #
 LOCAL_PATH:= $(call my-dir)
@@ -47,5 +45,3 @@ else
   LOCAL_MODULE:= reference-ril
   include $(BUILD_EXECUTABLE)
 endif
-
-endif # BOARD_PROVIDES_LIBREFERENCE_RIL

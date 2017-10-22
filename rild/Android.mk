@@ -1,7 +1,5 @@
 # Copyright 2006 The Android Open Source Project
 
-ifneq ($(BOARD_PROVIDES_RILD),true)
-
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
@@ -32,6 +30,10 @@ LOCAL_INIT_RC := rild.rc
 
 LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/libril
 
+ifeq ($(BOARD_PROVIDES_LIBRIL),true)
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/..
+endif
+
 include $(BUILD_EXECUTABLE)
 
 # For radiooptions binary
@@ -51,5 +53,3 @@ LOCAL_MODULE:= radiooptions
 LOCAL_MODULE_TAGS := debug
 
 include $(BUILD_EXECUTABLE)
-
-endif
